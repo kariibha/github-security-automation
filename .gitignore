@@ -1,0 +1,22 @@
+# SAM build artifacts
+.aws-sam/
+samconfig.toml
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets (never commit these!)
+*.pem
+*.key
+.env

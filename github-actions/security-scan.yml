@@ -1,0 +1,83 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'json'
+          output: 'trivy-results.json'
+          severity: 'HIGH,CRITICAL'
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Process and store CVEs
+        env:
+          DYNAMODB_TABLE: ${{ secrets.DYNAMODB_TABLE }}
+        run: |
+          pip install boto3
+          python3 << 'PYTHON'
+          import json
+          import boto3
+          import os
+          from datetime import datetime
+          
+          table_name = os.environ.get('DYNAMODB_TABLE', 'github-security-cves')
+          dynamodb = boto3.client('dynamodb', region_name='us-east-1')
+          repo = "${{ github.repository }}"
+          
+          try:
+              with open('trivy-results.json', 'r') as f:
+                  results = json.load(f)
+          except:
+              print("No Trivy results found")
+              exit(0)
+          
+          cve_count = 0
+          for result in results.get('Results', []):
+              for vuln in result.get('Vulnerabilities', []):
+                  if vuln.get('Severity') in ['HIGH', 'CRITICAL']:
+                      try:
+                          dynamodb.put_item(
+                              TableName=table_name,
+                              Item={
+                                  'repo': {'S': repo},
+                                  'cve_id': {'S': vuln.get('VulnerabilityID', 'Unknown')},
+                                  'severity': {'S': vuln.get('Severity', 'Unknown')},
+                                  'package': {'S': vuln.get('PkgName', 'Unknown')},
+                                  'version': {'S': vuln.get('InstalledVersion', 'Unknown')},
+                                  'description': {'S': vuln.get('Title', '')[:500]},
+                                  'detected_date': {'S': datetime.utcnow().isoformat()}
+                              }
+                          )
+                          cve_count += 1
+                          print(f"Stored {vuln.get('VulnerabilityID')}")
+                      except Exception as e:
+                          print(f"Failed to store CVE: {e}")
+          
+          print(f"Total CVEs stored: {cve_count}")
+          PYTHON

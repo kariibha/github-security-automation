@@ -1,0 +1,156 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: AI-Powered GitHub Security Automation System
+
+Parameters:
+  GitHubToken:
+    Type: String
+    NoEcho: true
+    Description: GitHub Personal Access Token
+    Default: "placeholder"
+  
+  GitHubWebhookSecret:
+    Type: String
+    NoEcho: true
+    Description: GitHub Webhook Secret
+    Default: "placeholder"
+  
+  NotificationEmail:
+    Type: String
+    Description: Email address for security notifications
+
+Globals:
+  Function:
+    Tags:
+      auto-delete: "no"
+
+Resources:
+  SecurityWebhookFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-webhook-handler'
+      Runtime: python3.12
+      Handler: security_webhook_handler.lambda_handler
+      CodeUri: ../lambda/
+      Timeout: 300
+      MemorySize: 512
+      Tags:
+        auto-delete: "no"
+      Environment:
+        Variables:
+          GITHUB_TOKEN: !Ref GitHubToken
+          WEBHOOK_SECRET: !Ref GitHubWebhookSecret
+          CVE_TABLE: !Ref CVETable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref CVETable
+        - Statement:
+          - Effect: Allow
+            Action:
+              - bedrock:InvokeModel
+              - bedrock:Converse
+              - bedrock:InvokeTool
+            Resource: 
+              - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.amazon.nova-*'
+              - 'arn:aws:bedrock:*::foundation-model/*'
+              - !Sub 'arn:aws:bedrock::${AWS::AccountId}:system-tool/*'
+      Events:
+        WebhookApi:
+          Type: Api
+          Properties:
+            Path: /webhook
+            Method: POST
+
+  CVETable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${AWS::StackName}-cves'
+      BillingMode: PAY_PER_REQUEST
+      Tags:
+        - Key: auto-delete
+          Value: "no"
+      AttributeDefinitions:
+        - AttributeName: repo
+          AttributeType: S
+        - AttributeName: cve_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: repo
+          KeyType: HASH
+        - AttributeName: cve_id
+          KeyType: RANGE
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+
+  CVEStreamProcessor:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-cve-processor'
+      Runtime: python3.12
+      Handler: cve_stream_processor.lambda_handler
+      CodeUri: ../lambda/
+      Timeout: 60
+      Tags:
+        auto-delete: "no"
+      Environment:
+        Variables:
+          SNS_TOPIC_ARN: !Ref SecurityAlertsTopic
+      Policies:
+        - DynamoDBStreamReadPolicy:
+            TableName: !Ref CVETable
+            StreamName: !GetAtt CVETable.StreamArn
+        - SNSPublishMessagePolicy:
+            TopicName: !GetAtt SecurityAlertsTopic.TopicName
+        - Statement:
+          - Effect: Allow
+            Action:
+              - bedrock:InvokeModel
+              - bedrock:Converse
+              - bedrock:InvokeTool
+            Resource: 
+              - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.amazon.nova-*'
+              - 'arn:aws:bedrock:*::foundation-model/*'
+              - !Sub 'arn:aws:bedrock::${AWS::AccountId}:system-tool/*'
+      Events:
+        Stream:
+          Type: DynamoDB
+          Properties:
+            Stream: !GetAtt CVETable.StreamArn
+            StartingPosition: LATEST
+            BatchSize: 10
+
+  SecurityAlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${AWS::StackName}-alerts'
+      Tags:
+        - Key: auto-delete
+          Value: "no"
+
+  EmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref SecurityAlertsTopic
+      Protocol: email
+      Endpoint: !Ref NotificationEmail
+
+  SecurityReportsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${AWS::StackName}-reports-${AWS::AccountId}'
+      Tags:
+        - Key: auto-delete
+          Value: "no"
+
+Outputs:
+  WebhookUrl:
+    Description: GitHub Webhook URL - Add this to your repository settings
+    Value: !Sub 'https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/webhook'
+  
+  CVETableName:
+    Description: DynamoDB table name for GitHub Actions workflow
+    Value: !Ref CVETable
+  
+  AlertsTopicArn:
+    Description: SNS topic for security alerts
+    Value: !Ref SecurityAlertsTopic
