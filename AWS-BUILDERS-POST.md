@@ -163,14 +163,21 @@ Don't forget `bedrock:InvokeTool` for web grounding:
     - !Sub 'arn:aws:bedrock::${AWS::AccountId}:system-tool/*'
 ```
 
-## Cost Comparison
+## Nova 2 Lite Pricing
 
-| Model | Monthly Cost (est.) |
-|-------|---------------------|
-| Claude 3.5 Sonnet | $30-80 |
-| **Nova 2 Lite** | **$10-25** |
+Nova 2 Lite offers excellent price-performance for security automation workloads:
 
-~70% savings with Nova 2 Lite, plus you get web grounding for real-time CVE intelligence.
+| Pricing | Cost |
+|---------|------|
+| Input tokens | $0.00125 per 1K tokens |
+| Output tokens | $0.005 per 1K tokens |
+| Web grounding | $0.01 per search |
+
+For a typical security scan analyzing 10 CVEs with ~500 input tokens and ~2000 output tokens per analysis:
+- **Estimated cost per scan**: ~$0.15-0.25
+- **Monthly cost** (10 scans/day): ~$45-75
+
+Nova 2 Lite equals or beats comparable models on 13 out of 15 benchmarks while offering industry-leading price performance.
 
 ## Lessons Learned
 
@@ -198,4 +205,4 @@ The repo includes:
 
 *Have questions? Find me on the AWS Community Builders Slack or Twitter [@kariibha](https://twitter.com/kariibha).*
 
-**Tags:** #AWS #AmazonBedrock #NovaAI #Security #Serverless #GitHubActions
+**Tags:** #AWS #AmazonBedrock #AmazonNova #Security #Serverless #GitHubActions
