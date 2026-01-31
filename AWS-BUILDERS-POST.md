@@ -1,27 +1,35 @@
 # Building an AI-Powered GitHub Security Scanner with Amazon Nova 2 Lite
 
-**TL;DR:** I built a serverless security automation system that uses Amazon Nova 2 Lite with web grounding to detect secrets, analyze CVEs with real-time intelligence, and notify developers—all triggered automatically on every push.
+## Executive Summary
 
-## The Problem
+This post describes a serverless security automation system that uses Amazon Nova 2 Lite with web grounding to detect secrets, analyze CVEs with real-time intelligence, and notify developers automatically on every code push. The solution combines open-source scanning tools with AI-powered analysis to help development teams prioritize vulnerabilities based on current threat intelligence rather than static severity labels.
 
-Every developer has accidentally committed a secret at some point. And keeping track of CVEs in your dependencies? That's a full-time job. I wanted a system that would:
+## The Customer Problem
 
-1. **Block secrets before they're committed** (pre-commit hooks)
-2. **Scan for vulnerable packages** on every push (GitHub Actions)
-3. **Analyze CVEs with real-time intelligence** (not stale databases)
-4. **Notify me immediately** with actionable insights
+Development teams face two persistent security challenges:
 
-## Why Not Just Use Trivy?
+1. **Accidental secret exposure** – API keys, credentials, and tokens committed to repositories
+2. **Dependency vulnerability management** – Tracking CVEs across dozens of packages and prioritizing remediation
 
-Trivy is excellent at *detecting* vulnerabilities. But here's what it gives you:
+Traditional vulnerability scanners detect issues but provide limited context. When a scan returns 12 CVEs labeled "CRITICAL," teams lack the information needed to determine which vulnerabilities pose actual risk and require immediate attention.
+
+## Why Static CVE Data Falls Short
+
+Consider what a typical vulnerability scanner returns:
 
 ```
 CVE-2024-21626 | CRITICAL | runc | 1.1.11 | "container breakout vulnerability"
 ```
 
-That's a static description from a CVE database. When you have 12 CVEs flagged, which one do you fix first? Is "CRITICAL" actually critical for *your* environment?
+This static description from a CVE database answers *what* but not *so what*. Teams need to know:
+- Is this vulnerability being actively exploited?
+- What is the actual attack vector?
+- What specific remediation steps should we take?
+- Are there workarounds if immediate patching isn't possible?
 
-**Nova 2 Lite with web grounding transforms this into:**
+## Solution Overview
+
+This solution adds an AI-powered intelligence layer using Amazon Nova 2 Lite with web grounding. When vulnerabilities are detected, Nova 2 Lite searches current web sources to provide:
 
 ```
 CVE-2024-21626 is actively being exploited in the wild as of January 2026. 
@@ -30,75 +38,61 @@ Patch to runc 1.1.12+. If patching isn't immediate, restrict container
 capabilities and monitor for unusual /proc access patterns.
 ```
 
-| Trivy Alone | + Nova 2 Lite |
-|-------------|---------------|
-| Static CVE description | Real-time web intelligence with citations |
-| "It's critical" | "It's being actively exploited *right now*" |
-| Lists the vulnerability | Explains the actual attack vector |
-| No remediation context | Specific patch version + workarounds |
-| Same info as 6 months ago | Current threat landscape |
+| Static Scanner Output | With Nova 2 Lite Analysis |
+|-----------------------|---------------------------|
+| CVE description from database | Real-time web intelligence with citations |
+| Severity label | Active exploitation status |
+| Vulnerability name | Specific attack vector explanation |
+| No remediation context | Patch versions and workarounds |
 
-**The real value:** When you have many repos and many CVEs, you need *intelligent triage*—knowing which vulnerabilities pose actual risk today, not just what the severity label says.
-
-## AWS Services & Tools Used
-
-| Service/Tool | What It Does |
-|--------------|--------------|
-| **Amazon Nova 2 Lite** | Foundation model with web grounding for real-time CVE intelligence |
-| **Amazon Bedrock** | Managed service to access Nova 2 Lite via API |
-| **AWS Lambda** | Serverless compute to run CVE analysis on-demand |
-| **Amazon DynamoDB** | NoSQL database to store detected CVEs; Streams trigger Lambda on new inserts |
-| **Amazon SNS** | Simple Notification Service for email alerts |
-| **AWS SAM** | Serverless Application Model for infrastructure-as-code deployment |
-| **Trivy** | Open-source vulnerability scanner (detects CVEs in dependencies, containers, IaC) |
-| **Gitleaks** | Open-source secret detection for pre-commit hooks |
-
-## What is Trivy?
-
-[Trivy](https://trivy.dev/) is a comprehensive open-source security scanner by Aqua Security. It detects:
-
-- **Vulnerabilities** in OS packages and language dependencies (npm, pip, Maven, Go, etc.)
-- **Misconfigurations** in Terraform, CloudFormation, Kubernetes, Docker
-- **Secrets** accidentally committed to code
-- **License violations** in dependencies
-
-We use Trivy in GitHub Actions because it's fast, accurate, has a native GitHub Action, and outputs JSON that's easy to parse. When you push code with `django==3.2.0`, Trivy checks it against CVE databases and returns all known vulnerabilities.
-
-## The Solution: Nova 2 Lite + Web Grounding
-
-The game-changer here is **Amazon Nova 2 Lite's web grounding feature**. Instead of relying on static CVE databases, it searches the web in real-time to provide current threat intelligence with citations.
-
-### Architecture
+## Architecture
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
 │   Pre-commit    │     │  GitHub Actions │     │    Lambda +     │
-│   (gitleaks)    │────▶│  (Trivy scan)   │────▶│   Nova 2 Lite   │
+│   (Gitleaks)    │────▶│  (Trivy scan)   │────▶│   Nova 2 Lite   │
 │   Block secrets │     │  Detect CVEs    │     │   AI Analysis   │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
                                                         │
                                                         ▼
                                                 ┌─────────────────┐
-                                                │  SNS Email      │
+                                                │  Amazon SNS     │
                                                 │  Notification   │
                                                 └─────────────────┘
 ```
 
-### Key Components
+**Data flow:**
+1. Developer commits code
+2. Gitleaks pre-commit hook blocks secrets locally
+3. On push, GitHub Actions runs Trivy vulnerability scan
+4. Detected CVEs are stored in Amazon DynamoDB
+5. DynamoDB Streams triggers AWS Lambda
+6. Lambda invokes Amazon Nova 2 Lite with web grounding for analysis
+7. Amazon SNS sends batched email notification with AI insights
 
-| Component | Purpose |
-|-----------|---------|
-| Gitleaks pre-commit hook | Blocks secrets locally before commit |
-| GitHub Actions + Trivy | Scans dependencies for CVEs on push |
-| DynamoDB + Streams | Stores CVEs and triggers processing |
-| Lambda + Nova 2 Lite | AI-powered CVE analysis with web grounding |
-| SNS | Batched email notifications |
+## AWS Services Used
 
-## The Code
+| Service | Purpose |
+|---------|---------|
+| **Amazon Bedrock** | Managed access to Amazon Nova 2 Lite foundation model |
+| **Amazon Nova 2 Lite** | AI analysis with web grounding for real-time CVE intelligence |
+| **AWS Lambda** | Serverless compute for on-demand CVE processing |
+| **Amazon DynamoDB** | CVE storage with Streams for event-driven processing |
+| **Amazon SNS** | Email notifications |
+| **AWS SAM** | Infrastructure-as-code deployment |
 
-### Using Nova 2 Lite with Web Grounding
+## Open-Source Tools
 
-The key insight: web grounding uses `toolConfig` with a `systemTool`, not `additionalModelRequestFields`:
+| Tool | Purpose |
+|------|---------|
+| **[Trivy](https://trivy.dev/)** | Vulnerability scanner by Aqua Security for dependencies, containers, and IaC |
+| **[Gitleaks](https://gitleaks.io/)** | Secret detection for pre-commit hooks |
+
+## Implementation
+
+### Nova 2 Lite with Web Grounding
+
+Web grounding enables Nova 2 Lite to search current web sources when generating responses. The key implementation detail: web grounding uses `toolConfig` with a `systemTool`, not `additionalModelRequestFields`.
 
 ```python
 import boto3
@@ -106,16 +100,16 @@ import boto3
 bedrock = boto3.client('bedrock-runtime', region_name='us-east-1')
 
 response = bedrock.converse(
-    modelId='us.amazon.nova-2-lite-v1:0',  # Use inference profile
+    modelId='us.amazon.nova-2-lite-v1:0',
     messages=[{
         "role": "user",
-        "content": [{"text": f"Analyze the risk for CVE-2024-21626"}]
+        "content": [{"text": "Analyze the risk for CVE-2024-21626"}]
     }],
     inferenceConfig={"maxTokens": 500, "temperature": 0.3},
     toolConfig={
         "tools": [{
             "systemTool": {
-                "name": "nova_grounding"  # Enables web search
+                "name": "nova_grounding"
             }
         }]
     }
@@ -162,71 +156,46 @@ jobs:
       - name: Store CVEs in DynamoDB
         run: |
           # Parse Trivy results and store in DynamoDB
-          # This triggers the Lambda via DynamoDB Streams
+          # DynamoDB Streams triggers Lambda for AI analysis
 ```
 
-### Lambda CVE Processor
+### IAM Permissions
 
-```python
-def lambda_handler(event, context):
-    """Process CVEs from DynamoDB stream with batched notifications"""
-    
-    # Collect CVEs from stream records
-    cves = [parse_record(r) for r in event['Records'] if r['eventName'] == 'INSERT']
-    
-    # Get AI analysis with web grounding
-    cve_list = ", ".join([c['cve_id'] for c in cves[:5]])
-    response = bedrock.converse(
-        modelId='us.amazon.nova-2-lite-v1:0',
-        messages=[{"role": "user", "content": [{"text": f"Summarize risks for: {cve_list}"}]}],
-        toolConfig={"tools": [{"systemTool": {"name": "nova_grounding"}}]}
-    )
-    
-    # Send ONE batched notification (not per-CVE!)
-    sns.publish(
-        TopicArn=topic_arn,
-        Subject=f"🚨 {len(cves)} CVEs Detected",
-        Message=f"AI Analysis:\n{ai_summary}\n\nCVEs:\n{cve_details}"
-    )
-```
-
-## Real Results
-
-When I pushed a `requirements.txt` with Django 3.2.0, the system:
-
-1. ✅ Trivy detected **12 CVEs** (8 Critical, 4 High)
-2. ✅ Nova 2 Lite analyzed each with **real-time web data**
-3. ✅ I received **one consolidated email** with AI insights
-
-Example AI analysis for CVE-2024-21626:
-> "CVE-2024-21626 is a high-severity container escape vulnerability in runc, allowing attackers to break out of containers. CVSS score 8.6. Patch immediately by upgrading to runc 1.1.12+."
-
-## IAM Permissions for Web Grounding
-
-Don't forget `bedrock:InvokeTool` for web grounding:
+Web grounding requires `bedrock:InvokeTool` permission:
 
 ```yaml
 - Effect: Allow
   Action:
     - bedrock:Converse
-    - bedrock:InvokeTool  # Required for web grounding!
+    - bedrock:InvokeTool
   Resource:
     - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.amazon.nova-2-lite-v1:0'
     - 'arn:aws:bedrock:*::foundation-model/*'
     - !Sub 'arn:aws:bedrock::${AWS::AccountId}:system-tool/*'
 ```
 
-## Nova 2 Lite Pricing
+## Results
 
-Nova 2 Lite offers excellent price-performance for security automation workloads:
+Testing with a `requirements.txt` containing Django 3.2.0:
 
-| Pricing | Cost |
-|---------|------|
+1. Trivy detected 12 CVEs (8 Critical, 4 High)
+2. Nova 2 Lite analyzed vulnerabilities with current web data
+3. Single consolidated email delivered with AI-powered insights
+
+Example AI analysis output:
+> "CVE-2024-21626 is a high-severity container escape vulnerability in runc, allowing attackers to break out of containers. CVSS score 8.6. Patch immediately by upgrading to runc 1.1.12+."
+
+## Pricing
+
+Amazon Nova 2 Lite offers competitive price-performance:
+
+| Pricing Component | Cost |
+|-------------------|------|
 | Input tokens | $0.00125 per 1K tokens |
 | Output tokens | $0.005 per 1K tokens |
 | Web grounding | $0.01 per search |
 
-**Cost per scan (batched CVE analysis):**
+**Estimated cost per scan (batched CVE analysis):**
 - Input (~1K tokens): $0.00125
 - Output (~500 tokens): $0.0025  
 - Web grounding: $0.01
@@ -234,15 +203,13 @@ Nova 2 Lite offers excellent price-performance for security automation workloads
 
 **Monthly estimate (10 scans/day): ~$4-6**
 
-Nova 2 Lite equals or beats comparable models on 13 out of 15 benchmarks while offering industry-leading price performance.
-
 ## Lessons Learned
 
-1. **Batch your notifications** - My first version sent one email per CVE. I got 12 emails in 2 minutes. 😅
-2. **Use inference profiles** - The model ID is `us.amazon.nova-2-lite-v1:0`, not `amazon.nova-2-lite-v1:0`
-3. **Web grounding = toolConfig** - It's a system tool, not an inference config option
+1. **Batch notifications** – Initial implementation sent one email per CVE. Batching reduced notification volume significantly.
+2. **Use inference profiles** – The model ID is `us.amazon.nova-2-lite-v1:0`, not `amazon.nova-2-lite-v1:0`.
+3. **Web grounding configuration** – Web grounding is a system tool configured via `toolConfig`, not an inference parameter.
 
-## Try It Yourself
+## Getting Started
 
 ```bash
 git clone https://github.com/kariibha/github-security-automation.git
@@ -250,13 +217,17 @@ cd github-security-automation/infrastructure
 sam build && sam deploy --guided
 ```
 
-The repo includes:
-- SAM template for all AWS resources
+The repository includes:
+- AWS SAM template for all resources
 - GitHub Actions workflow for CVE scanning
 - Pre-commit hook installer for secret detection
-- Full documentation in README.md
+- Documentation
 
-**GitHub Repo:** [github.com/kariibha/github-security-automation](https://github.com/kariibha/github-security-automation)
+**Repository:** [github.com/kariibha/github-security-automation](https://github.com/kariibha/github-security-automation)
+
+## Conclusion
+
+This solution demonstrates how Amazon Nova 2 Lite with web grounding can transform static vulnerability data into actionable intelligence. By combining open-source scanning tools with AI-powered analysis, development teams can prioritize remediation based on current threat landscape rather than severity labels alone.
 
 ---
 
