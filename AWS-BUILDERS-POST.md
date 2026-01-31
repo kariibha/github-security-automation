@@ -11,6 +11,35 @@ Every developer has accidentally committed a secret at some point. And keeping t
 3. **Analyze CVEs with real-time intelligence** (not stale databases)
 4. **Notify me immediately** with actionable insights
 
+## Why Not Just Use Trivy?
+
+Trivy is excellent at *detecting* vulnerabilities. But here's what it gives you:
+
+```
+CVE-2024-21626 | CRITICAL | runc | 1.1.11 | "container breakout vulnerability"
+```
+
+That's a static description from a CVE database. When you have 12 CVEs flagged, which one do you fix first? Is "CRITICAL" actually critical for *your* environment?
+
+**Nova 2 Lite with web grounding transforms this into:**
+
+```
+CVE-2024-21626 is actively being exploited in the wild as of January 2026. 
+CVSS 8.6. Attackers can escape containers via /proc/self/fd manipulation. 
+Patch to runc 1.1.12+. If patching isn't immediate, restrict container 
+capabilities and monitor for unusual /proc access patterns.
+```
+
+| Trivy Alone | + Nova 2 Lite |
+|-------------|---------------|
+| Static CVE description | Real-time web intelligence with citations |
+| "It's critical" | "It's being actively exploited *right now*" |
+| Lists the vulnerability | Explains the actual attack vector |
+| No remediation context | Specific patch version + workarounds |
+| Same info as 6 months ago | Current threat landscape |
+
+**The real value:** When you have many repos and many CVEs, you need *intelligent triage*—knowing which vulnerabilities pose actual risk today, not just what the severity label says.
+
 ## AWS Services & Tools Used
 
 | Service/Tool | What It Does |
@@ -18,11 +47,11 @@ Every developer has accidentally committed a secret at some point. And keeping t
 | **Amazon Nova 2 Lite** | Foundation model with web grounding for real-time CVE intelligence |
 | **Amazon Bedrock** | Managed service to access Nova 2 Lite via API |
 | **AWS Lambda** | Serverless compute to run CVE analysis on-demand |
-| **Amazon DynamoDB** | NoSQL database to store detected CVEs with Streams for event-driven processing |
+| **Amazon DynamoDB** | NoSQL database to store detected CVEs; Streams trigger Lambda on new inserts |
 | **Amazon SNS** | Simple Notification Service for email alerts |
 | **AWS SAM** | Serverless Application Model for infrastructure-as-code deployment |
-| **Trivy** | Open-source vulnerability scanner by Aqua Security (scans dependencies, containers, IaC) |
-| **Gitleaks** | Open-source secret detection tool for pre-commit hooks |
+| **Trivy** | Open-source vulnerability scanner (detects CVEs in dependencies, containers, IaC) |
+| **Gitleaks** | Open-source secret detection for pre-commit hooks |
 
 ## What is Trivy?
 
