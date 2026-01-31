@@ -181,7 +181,7 @@ Don't forget `bedrock:InvokeTool` for web grounding:
 ## Try It Yourself
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/github-security-automation.git
+git clone https://github.com/kariibha/github-security-automation.git
 cd github-security-automation/infrastructure
 sam build && sam deploy --guided
 ```
@@ -191,6 +191,8 @@ The repo includes:
 - GitHub Actions workflow for CVE scanning
 - Pre-commit hook installer for secret detection
 - Full documentation in README.md
+
+**GitHub Repo:** [github.com/kariibha/github-security-automation](https://github.com/kariibha/github-security-automation)
 
 ---
 
