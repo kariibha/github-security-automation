@@ -197,9 +197,13 @@ Nova 2 Lite offers excellent price-performance for security automation workloads
 | Output tokens | $0.005 per 1K tokens |
 | Web grounding | $0.01 per search |
 
-For a typical security scan analyzing 10 CVEs with ~500 input tokens and ~2000 output tokens per analysis:
-- **Estimated cost per scan**: ~$0.15-0.25
-- **Monthly cost** (10 scans/day): ~$45-75
+**Cost per scan (batched CVE analysis):**
+- Input (~1K tokens): $0.00125
+- Output (~500 tokens): $0.0025  
+- Web grounding: $0.01
+- **Total: ~$0.01-0.02 per scan**
+
+**Monthly estimate (10 scans/day): ~$4-6**
 
 Nova 2 Lite equals or beats comparable models on 13 out of 15 benchmarks while offering industry-leading price performance.
 
