@@ -11,6 +11,30 @@ Every developer has accidentally committed a secret at some point. And keeping t
 3. **Analyze CVEs with real-time intelligence** (not stale databases)
 4. **Notify me immediately** with actionable insights
 
+## AWS Services & Tools Used
+
+| Service/Tool | What It Does |
+|--------------|--------------|
+| **Amazon Nova 2 Lite** | Foundation model with web grounding for real-time CVE intelligence |
+| **Amazon Bedrock** | Managed service to access Nova 2 Lite via API |
+| **AWS Lambda** | Serverless compute to run CVE analysis on-demand |
+| **Amazon DynamoDB** | NoSQL database to store detected CVEs with Streams for event-driven processing |
+| **Amazon SNS** | Simple Notification Service for email alerts |
+| **AWS SAM** | Serverless Application Model for infrastructure-as-code deployment |
+| **Trivy** | Open-source vulnerability scanner by Aqua Security (scans dependencies, containers, IaC) |
+| **Gitleaks** | Open-source secret detection tool for pre-commit hooks |
+
+## What is Trivy?
+
+[Trivy](https://trivy.dev/) is a comprehensive open-source security scanner by Aqua Security. It detects:
+
+- **Vulnerabilities** in OS packages and language dependencies (npm, pip, Maven, Go, etc.)
+- **Misconfigurations** in Terraform, CloudFormation, Kubernetes, Docker
+- **Secrets** accidentally committed to code
+- **License violations** in dependencies
+
+We use Trivy in GitHub Actions because it's fast, accurate, has a native GitHub Action, and outputs JSON that's easy to parse. When you push code with `django==3.2.0`, Trivy checks it against CVE databases and returns all known vulnerabilities.
+
 ## The Solution: Nova 2 Lite + Web Grounding
 
 The game-changer here is **Amazon Nova 2 Lite's web grounding feature**. Instead of relying on static CVE databases, it searches the web in real-time to provide current threat intelligence with citations.
@@ -202,7 +226,5 @@ The repo includes:
 **GitHub Repo:** [github.com/kariibha/github-security-automation](https://github.com/kariibha/github-security-automation)
 
 ---
-
-*Have questions? Find me on the AWS Community Builders Slack or Twitter [@kariibha](https://twitter.com/kariibha).*
 
 **Tags:** #AWS #AmazonBedrock #AmazonNova #Security #Serverless #GitHubActions
